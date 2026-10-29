@@ -1,3 +1,13 @@
+> **FAT3D: Fatal Racing, tuned for modern PCs**
+>
+> This fork is the RenacidaMods build of Fatal Racing: HD textures (from a pack each player makes from their own copy), render scale up to the screen's own resolution, sun shading, real car shadows, reflective car paint, a gradient sky with soft clouds, ambient occlusion, HUD scaling, CD music from MP3 and fixes. The aim is Fatal Racing as it might have looked on the 3D cards of the late 1990s, at today's resolutions and refresh rates.
+>
+> **Built on ROLLER by FatalDecomp.** [ROLLER](https://github.com/FatalDecomp/ROLLER) is the work of the FatalDecomp team and its contributors; their rebuild of the game made all of this possible. FAT3D only builds on top of it.
+>
+> **What's changed and how it works:** [FAT3D-changes.md](FAT3D-changes.md), one commit per change, most behind a setting. No game files included: you need your own copy of Fatal Racing.
+>
+> More from RenacidaMods: [github.com/RenacidaMods](https://github.com/RenacidaMods). Not affiliated with Gremlin Interactive or its successors.
+
 # ROLLER
 
 [![CI][ci-shd]][ci-url] [![LC][lc-shd]][lc-url] [![Download][dl-shd]][dl-url]

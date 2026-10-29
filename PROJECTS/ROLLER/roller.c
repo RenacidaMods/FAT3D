@@ -886,7 +886,9 @@ int InitSDL(char *whiplash_root, const char *midi_root)
    * white-border flash that occurs when the window is resized on startup. */
   uiWindowFlags |= SDL_WINDOW_HIDDEN;
 #endif
-  s_pWindow = SDL_CreateWindow("ROLLER", 640, 400, uiWindowFlags);
+  /* FAT3D: the RenacidaMods build of ROLLER (players see this name; the code
+   * keeps ROLLER's internals and credits FatalDecomp). */
+  s_pWindow = SDL_CreateWindow("FAT3D: Fatal Racing, tuned for modern PCs", 640, 400, uiWindowFlags);
   if (!s_pWindow) {
     ErrorBoxExit("Couldn't create window: %s", SDL_GetError());
     return 1;
@@ -2899,7 +2901,7 @@ void ErrorBoxExit(const char *szErrorMsgFormat, ...)
 
   SDL_ShowMessageBox(&(SDL_MessageBoxData)
   {
-    .title = "ROLLER",
+    .title = "FAT3D",
       .message = szErrorMsg,
       .flags = SDL_MESSAGEBOX_ERROR,
       .numbuttons = 1,
