@@ -4,7 +4,7 @@
 
 The aim: Fatal Racing as it might have looked with full 3D-card rendering of the late 1990s and early 2000s, at today's resolutions and refresh rates. The name comes from FAT3D.EXE, the game's own first 3D-card version (the 1996 3D Blaster patch).
 
-Source: branch `renacida-mods` of https://github.com/RenacidaMods/ROLLER. One commit per change; most are behind a setting. Nothing here needs or ships game files: players use their own copy of Fatal Racing.
+Source: branch `renacida-mods` of https://github.com/RenacidaMods/FAT3D. One commit per change; most are behind a setting. Nothing here needs or ships game files: players use their own copy of Fatal Racing.
 
 Last updated: 29/10/2026.
 
