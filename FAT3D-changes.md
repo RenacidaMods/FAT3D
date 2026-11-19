@@ -44,7 +44,7 @@ All the lighting and effects below are **GPU renderer only**. The original softw
 - Cars have their own atlas per car design. The HD car loader builds that atlas from HD tiles at 4x, shares the sheet between cars of the same design, and pulls texture coordinates 2 HD texels in so filtering never reaches into the neighbouring tile (that showed as a square outline round the wheels).
 - Car panels are drawn as a 4x4 grid instead of two triangles, so tapered panels (the Global's bonnet lettering) don't bend their texture along the diagonal.
 - Loading uses several threads (PNG decoding was the slow part) and HD cars on the car-select screen get smooth filtering.
-- HD cloud tiles use normal filtering and are drawn through the blend pipeline, so soft see-through edges fade smoothly instead of being cut out at 50%.
+- HD cloud tiles use normal filtering, keep their alpha (every other HD tile's alpha is snapped to on or off at 50%, like palette index 0) and are drawn through the blend pipeline, so soft see-through edges fade smoothly.
 - The winner screen's background and the menus load HD pictures from `hd_textures\menu`.
 
 **Making a pack:** "Dump Textures as PNG" writes every tile the game loads to `hd_textures_dump`. `src\tools\hd_texture_sheet.py` stitches dumped tiles into sheets, drives Upscayl to upscale them, and cuts the result back into tiles (keeping the original's see-through border pixels clear). The pack itself is made from the game's copyrighted art, so it's never shared: each player makes their own from their own copy.
@@ -97,6 +97,7 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 ## Other fixes
 
 - Without a texture pack, the original clouds were drawn with the buildings and sun-shaded into dark blobs (players with a pack never saw it: HD clouds take the unshaded see-through pass). They now draw unshaded, after the shaded passes. Found with GPU snapshots, 19/11/2026.
+- **Soft cloud edges:** the HD loader snapped every HD tile's alpha to fully on or off at 50%, so the soft HD clouds were drawn as hard cut-outs. The sky cloud tiles (gentex 8 to 12) now keep their alpha; everything else is still snapped (19/11/2026).
 - Bank 18 particle textures were never freed.
 - The GPU renderer now honours the shadows option for car shadows.
 - Snapshot test runs never save FATAL.INI or ROLLER.INI.

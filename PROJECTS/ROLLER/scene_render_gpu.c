@@ -5315,7 +5315,8 @@ static bool flush_texture_uploads_if_large(SDL_GPUDevice *dev,
  * changes. HD tiles must be square, a power of two from the tile size up to
  * SCENE_GPU_HD_MAX_TILE_SIZE, and all the same size within a bank (the first
  * one found sets it). Alpha is snapped to 0/255 at 50%, matching palette
- * index 0's on/off transparency. A race reads a few thousand of these
+ * index 0's on/off transparency, except on the sky cloud tiles (gentex 8 to
+ * 12), which are drawn blended and keep their soft edges. A race reads a few thousand of these
  * files, so each bank's tiles are decoded on several threads at once
  * (load_hd_tile_files). Car meshes build their own sheet from
  * scene_render_gpu_load_hd_bank_tiles (game_render_hardware.c).
@@ -5325,8 +5326,9 @@ static bool flush_texture_uploads_if_large(SDL_GPUDevice *dev,
 
 /* Decodes one tile file to tightly packed RGBA and sets *outSize to its
  * width. NULL (with a log line) if unreadable, not square, or not a power of
- * two from tileSize to SCENE_GPU_HD_MAX_TILE_SIZE. */
-static uint8 *load_hd_tile_rgba(const char *path, int tileSize, int *outSize)
+ * two from tileSize to SCENE_GPU_HD_MAX_TILE_SIZE. softAlpha keeps the
+ * file's alpha as it is instead of snapping it. */
+static uint8 *load_hd_tile_rgba(const char *path, int tileSize, int *outSize, bool softAlpha)
 {
     SDL_Surface *loaded = IMG_Load(path);
     if (!loaded) {
@@ -5358,7 +5360,7 @@ static uint8 *load_hd_tile_rgba(const char *path, int tileSize, int *outSize)
                 dst[x * 4 + 0] = src[x * 4 + 0];
                 dst[x * 4 + 1] = src[x * 4 + 1];
                 dst[x * 4 + 2] = src[x * 4 + 2];
-                dst[x * 4 + 3] = src[x * 4 + 3] >= 128 ? 255 : 0;
+                dst[x * 4 + 3] = softAlpha ? src[x * 4 + 3] : src[x * 4 + 3] >= 128 ? 255 : 0;
             }
         }
         *outSize = size;
@@ -5384,7 +5386,9 @@ static int SDLCALL hd_tile_load_worker(void *data)
         SDL_PathInfo info;
         if (!SDL_GetPathInfo(path, &info) || info.type != SDL_PATHTYPE_FILE)
             continue;
-        job->tiles[t] = load_hd_tile_rgba(path, job->tileSize, &job->sizes[t]);
+        /* The sky cloud tiles (see the section comment) keep soft edges. */
+        bool softAlpha = t >= 8 && t <= 12 && SDL_strstr(job->dir, "/gentex") != NULL;
+        job->tiles[t] = load_hd_tile_rgba(path, job->tileSize, &job->sizes[t], softAlpha);
         if (!job->tiles[t]) job->sizes[t] = -1;
     }
     return 0;
