@@ -3054,6 +3054,25 @@ int main(int argc, const char **argv, const char **envp)
         cli_fprintf(stderr, "ERROR: '--out' needs an argument\n");
         return 1;
       }
+    } else if (strcmp(argv[i], "--snapshot-gpu") == 0) {
+      // FAT3D: render --snapshot replay frames through the GPU renderer.
+      if (i + 1 >= argc || SnapshotSetGpuBackend(argv[i + 1]) != 0) {
+        cli_fprintf(stderr, "ERROR: '--snapshot-gpu' expects vulkan or direct3d12\n");
+        return 1;
+      }
+      consumed = 2;
+    } else if (strcmp(argv[i], "--snapshot-size") == 0) {
+      if (i + 1 >= argc || SnapshotParseGpuSize(argv[i + 1]) != 0) {
+        cli_fprintf(stderr, "ERROR: '--snapshot-size' expects WIDTHxHEIGHT, for example 3840x2160\n");
+        return 1;
+      }
+      consumed = 2;
+    } else if (strcmp(argv[i], "--snapshot-look") == 0) {
+      if (i + 1 >= argc || SnapshotParseGpuLook(argv[i + 1]) != 0) {
+        cli_fprintf(stderr, "ERROR: '--snapshot-look' expects ini, nopack or stock\n");
+        return 1;
+      }
+      consumed = 2;
     } else if (strcmp(argv[i], "--gpu-parity") == 0) {
       if (i + 1 < argc) {
         szGpuParityBackend = argv[i + 1];
@@ -3218,8 +3237,14 @@ int main(int argc, const char **argv, const char **envp)
       cli_fprintf(stderr, "ERROR: snapshot mode requires '--out DIR'\n");
       return 1;
     }
+    if (SnapshotGpuActive() && g_SnapshotConfig.eKind != SNAPSHOT_KIND_REPLAY) {
+      cli_fprintf(stderr, "ERROR: '--snapshot-gpu' works with '--snapshot' replays only\n");
+      return 1;
+    }
     iCrashHandlerEnabled = 0;
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+    // GPU snapshots open no window, but Vulkan needs a real video driver.
+    if (!SnapshotGpuActive())
+      SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
     srand(0);
     ROLLERsrand(0);
   }
@@ -3308,6 +3333,7 @@ int main(int argc, const char **argv, const char **envp)
   if (strcmp(languagename, "Brazilian") == 0)
     g_bBrazilianMayte = true;
   InputLoadConfig();
+  SnapshotApplyGpuLook();                       // FAT3D: GPU snapshot look, after ROLLER.INI
   loadcheatnames();
   cdxinit();
   GetFirstCDDrive();
@@ -3907,6 +3933,10 @@ void play_game_init()
       MenuRenderer *pMR = GetMenuRenderer();
       if (pMR && menu_render_get_pending_mode(pMR) == MENU_RENDER_GPU)
           game_render_set_mode(g_pGameRenderer, GAME_RENDER_GPU);
+      if (SnapshotGpuActive()) {   /* FAT3D: GPU snapshots */
+          game_render_set_mode(g_pGameRenderer, GAME_RENDER_GPU);
+          game_render_set_force_gpu_load(g_pGameRenderer, true);
+      }
   }
   if (intro)
       game_render_set_force_gpu_load(g_pGameRenderer, true);

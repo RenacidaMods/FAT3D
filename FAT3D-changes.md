@@ -6,7 +6,7 @@ The aim: Fatal Racing as it might have looked with full 3D-card rendering of the
 
 Source: branch `renacida-mods` of https://github.com/RenacidaMods/FAT3D. One commit per change; most are behind a setting. Nothing here needs or ships game files: players use their own copy of Fatal Racing.
 
-Last updated: 29/10/2026.
+Last updated: 19/11/2026.
 
 ---
 
@@ -104,6 +104,7 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 
 - `src\tools\hd_texture_sheet.py`: dump, stitch, upscale with Upscayl, cut back.
 - The "Dump Textures as PNG" option.
+- **GPU snapshots:** `--snapshot REPLAY.GSS --frames N,M --out DIR --snapshot-gpu vulkan|direct3d12 --snapshot-size 3840x2160 --snapshot-look ini|nopack|stock` renders replay frames through the GPU renderer with no window and saves them as PNGs, without the HUD. `ini` uses the player's ROLLER.INI look; `nopack` the same without HD textures (what a player sees before making a pack); `stock` is ROLLER's own GPU renderer, with HD textures, ambient occlusion, sky gradient, sun shading, real car shadows, car shine and tunnel darkening off (the player's texture filter and anti-aliasing stay, so a pair differs only by FAT3D's changes). For before-and-after screenshots, and for checking the GPU look headlessly. Settings are never saved. Editor and parity readbacks still skip the FAT3D look, so their outputs never change.
 
 ---
 
@@ -111,4 +112,5 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 
 - `scene_render_gpu.c` is part of the track editor's `roller-core` library but reads `g_bDumpTexturesPNG` and `g_bHDTextures` from `roller.c`, which the editor doesn't link. Pass them in through setters first.
 - Shaders: the headers store each shader as a byte array plus a separate `_size` constant; update both. Direct3D 12 needs each vertex and pixel shader pair compiled by the same shadercross (current builds pack SV_Position last); all scene shaders were rebuilt together on 27/10/2026.
+- Readbacks that keep the exact output push the flat-sky uniforms to the sky pipeline, which FAT3D's sky gradient shader replaces, so a readback that draws the sky gets a wrong colour (pure green). The parity tests pass, but fix this before offering the sky gradient upstream.
 - Good first pull requests: the shadows-option fix, the SDL audio fix, MP3 music. Link https://github.com/FatalDecomp/ROLLER/discussions/311 from any of them.

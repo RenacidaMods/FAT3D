@@ -24,6 +24,13 @@ typedef struct
   int iCapturedCount;
   int iMaxFrame;
   int iPresentFrame;
+  // FAT3D: GPU snapshots (--snapshot-gpu). Empty backend = software snapshots.
+  char szGpuBackend[16];
+  int iGpuWidth;
+  int iGpuHeight;
+  int bGpuStockLook;       // 1 = ROLLER's own GPU look (FAT3D extras off)
+  int bGpuNoPack;          // 1 = the player's look without HD textures
+  int iGpuLastFrame;       // last replay frame read back, so none is written twice
 } tSnapshotConfig;
 
 extern int g_bSnapshotMode;
@@ -73,6 +80,28 @@ void SnapshotApplyFixedSettings(void);
 // Pins record-table data after LoadRecords() so menu snapshots do not drift
 // with the developer's mutable dgkfc.rec file.
 void SnapshotApplyFixedRecords(void);
+
+// FAT3D: GPU snapshots render replay frames through the GPU renderer with no
+// window and read them back as RGBA PNGs, for screenshots and for checking the
+// GPU look headlessly. Settings come from ROLLER.INI (snapshot runs never save it).
+// Sets the backend ("vulkan" or "direct3d12"). Returns 0 on success.
+int SnapshotSetGpuBackend(const char *szBackend);
+// Parses "WIDTHxHEIGHT" for GPU snapshots. Returns 0 on success.
+int SnapshotParseGpuSize(const char *szSize);
+// "ini" (the player's settings), "nopack" (the same without HD textures) or
+// "stock" (FAT3D extras off). Returns 0 on success.
+int SnapshotParseGpuLook(const char *szLook);
+int SnapshotGpuActive(void);
+// Called after ROLLER.INI is loaded: hides the FPS counter and, for "stock",
+// turns off everything FAT3D adds to the GPU renderer. No-op without a GPU
+// snapshot.
+void SnapshotApplyGpuLook(void);
+// Called once per GPU frame. Returns 1 (with the size) when this replay frame
+// should be read back instead of submitted normally.
+int SnapshotGpuWantsFrame(int *piWidth, int *piHeight);
+// Called after every GPU frame; pbyRgba is the read-back frame or NULL. Writes
+// the PNG and stops the run once every requested frame is done.
+void SnapshotGpuFrameDone(const uint8 *pbyRgba, int iWidth, int iHeight);
 
 //-------------------------------------------------------------------------------------------------
 #endif

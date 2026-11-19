@@ -159,6 +159,7 @@ static void SnapshotBuildPath(char *szOut, size_t uiOutSize, int iFrame)
 void SnapshotPresent(void)
 {
   if (!g_bSnapshotMode || !scrbuf) return;
+  if (SnapshotGpuActive()) return;   // GPU snapshots capture in SnapshotGpuFrameDone
   if (!g_bPaletteSet) return;
 
   int iCaptureKey = currentreplayframe;
@@ -276,5 +277,130 @@ void SnapshotApplyFixedRecords(void)
     RecordKills[pFixture->iTrackIdx] = pFixture->iKills;
     memset(RecordNames[pFixture->iTrackIdx], 0, sizeof(RecordNames[pFixture->iTrackIdx]));
     strncpy(RecordNames[pFixture->iTrackIdx], pFixture->szName, sizeof(RecordNames[pFixture->iTrackIdx]) - 1);
+  }
+}
+
+//-------------------------------------------------------------------------------------------------
+// FAT3D: GPU snapshots
+
+int SnapshotSetGpuBackend(const char *szBackend)
+{
+  if (!szBackend || (strcmp(szBackend, "vulkan") != 0 && strcmp(szBackend, "direct3d12") != 0))
+    return 1;
+  strncpy(g_SnapshotConfig.szGpuBackend, szBackend, sizeof(g_SnapshotConfig.szGpuBackend) - 1);
+  g_SnapshotConfig.szGpuBackend[sizeof(g_SnapshotConfig.szGpuBackend) - 1] = '\0';
+  g_SnapshotConfig.iGpuLastFrame = -1;
+  if (g_SnapshotConfig.iGpuWidth <= 0) {
+    g_SnapshotConfig.iGpuWidth = 1920;
+    g_SnapshotConfig.iGpuHeight = 1080;
+  }
+  return 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+int SnapshotParseGpuSize(const char *szSize)
+{
+  int iWidth = 0, iHeight = 0;
+  if (!szSize || sscanf(szSize, "%dx%d", &iWidth, &iHeight) != 2)
+    return 1;
+  if (iWidth < 64 || iHeight < 64 || iWidth > 8192 || iHeight > 8192)
+    return 1;
+  g_SnapshotConfig.iGpuWidth = iWidth;
+  g_SnapshotConfig.iGpuHeight = iHeight;
+  return 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+int SnapshotParseGpuLook(const char *szLook)
+{
+  if (!szLook) return 1;
+  g_SnapshotConfig.bGpuStockLook = 0;
+  g_SnapshotConfig.bGpuNoPack = 0;
+  if (strcmp(szLook, "stock") == 0) g_SnapshotConfig.bGpuStockLook = 1;
+  else if (strcmp(szLook, "nopack") == 0) g_SnapshotConfig.bGpuNoPack = 1;
+  else if (strcmp(szLook, "ini") != 0) return 1;
+  return 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+int SnapshotGpuActive(void)
+{
+  return g_bSnapshotMode && g_SnapshotConfig.szGpuBackend[0] != '\0';
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void SnapshotApplyGpuLook(void)
+{
+  if (!SnapshotGpuActive()) return;
+  g_iFpsDisplay = 0;          // no FPS counter or name tags in screenshots
+  names_on = 0;
+  if (g_SnapshotConfig.bGpuNoPack)
+    g_bHDTextures = false;    // what a player sees before making a texture pack
+  if (g_SnapshotConfig.bGpuStockLook) {
+    // ROLLER's own GPU renderer: everything FAT3D adds switched off. The
+    // player's other settings (texture filter, anti-aliasing) stay, so both
+    // looks differ only by FAT3D's changes.
+    g_bHDTextures = false;
+    g_bAmbientOcclusion = false;
+    g_fSkyGradient = 0.0f;
+    g_fSunShade = 0.0f;
+    g_fCarShadows = 0.0f;
+    g_fCarShine = 0.0f;
+    g_fHUDScale = 1.0f;
+    g_fHUDMapScale = 1.0f;
+  }
+}
+
+//-------------------------------------------------------------------------------------------------
+
+int SnapshotGpuWantsFrame(int *piWidth, int *piHeight)
+{
+  if (!SnapshotGpuActive() || currentreplayframe == g_SnapshotConfig.iGpuLastFrame)
+    return 0;
+  for (int i = 0; i < g_SnapshotConfig.iNumFrames; ++i) {
+    if (g_SnapshotConfig.iFramesAy[i] == currentreplayframe) {
+      *piWidth = g_SnapshotConfig.iGpuWidth;
+      *piHeight = g_SnapshotConfig.iGpuHeight;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void SnapshotGpuFrameDone(const uint8 *pbyRgba, int iWidth, int iHeight)
+{
+  if (!SnapshotGpuActive()) return;
+
+  int iWidthWanted, iHeightWanted;
+  if (SnapshotGpuWantsFrame(&iWidthWanted, &iHeightWanted)) {
+    g_SnapshotConfig.iGpuLastFrame = currentreplayframe;
+    g_SnapshotConfig.iCapturedCount++;
+    if (pbyRgba) {
+      char szPath[512];
+      SnapshotBuildPath(szPath, sizeof(szPath), currentreplayframe);
+      SDL_CreateDirectory(g_SnapshotConfig.szOutDir);
+      if (RollerWriteRgbaPng(szPath, pbyRgba, iWidth, iHeight) != 0) {
+        fprintf(stderr, "snapshot: PNG write failed for '%s'\n", szPath);
+      } else {
+        fprintf(stdout, "snapshot: wrote '%s' (frame %d, %dx%d, %s look)\n", szPath,
+                currentreplayframe, iWidth, iHeight,
+                g_SnapshotConfig.bGpuStockLook ? "stock" : g_SnapshotConfig.bGpuNoPack ? "nopack" : "ini");
+        fflush(stdout);
+      }
+    } else {
+      fprintf(stderr, "snapshot: GPU readback failed for frame %d\n", currentreplayframe);
+    }
+  }
+
+  if (g_SnapshotConfig.iCapturedCount >= g_SnapshotConfig.iNumFrames ||
+      currentreplayframe >= g_SnapshotConfig.iMaxFrame) {
+    quit_game = 1;
+    racing = 0;
   }
 }

@@ -873,6 +873,17 @@ int InitSDL(char *whiplash_root, const char *midi_root)
     // Headless capture path: skip window/GPU/audio/MIDI init entirely.
     // The dummy SDL_VIDEO_DRIVER hint set by main() lets SDL_INIT_VIDEO
     // succeed without a display server.
+    // FAT3D: GPU snapshots need a GPU device, but still no window.
+    if (SnapshotGpuActive()) {
+      s_pGPUDevice = SDL_CreateGPUDevice(
+          SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL,
+          false, g_SnapshotConfig.szGpuBackend);
+      if (!s_pGPUDevice) {
+        fprintf(stderr, "snapshot: GPU device creation failed (%s): %s\n",
+                g_SnapshotConfig.szGpuBackend, SDL_GetError());
+        return 1;
+      }
+    }
     return 0;
   }
 

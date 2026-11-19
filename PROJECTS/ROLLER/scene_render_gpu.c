@@ -13,6 +13,7 @@
 #include "game_particle_shaders.h" /* particle vertex/pixel */
 #include "3d.h"                   /* wide_on */
 #include "roller.h"               /* ROLLERTryAcquireGPUSwapchainTexture */
+#include "snapshot.h"             /* FAT3D: GPU snapshots read back the full look */
 #include "png_writer.h"           /* RollerWriteRgbaPng -- "Pick Textures as PNG" / "Dump Textures as PNG" debug exports */
 #include "graphics.h"             /* GetTextureBankSource -- names "Dump Textures as PNG" / HD texture folders */
 #include <SDL3/SDL.h>
@@ -3567,6 +3568,10 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
     }
 
     bool bReadback = pbyPixels != NULL;
+    /* Editor and parity readbacks keep their exact output, so they skip the
+     * FAT3D look (sky gradient, sun, shadows, AO). FAT3D's GPU snapshots read
+     * back the full look. */
+    bool bExact = bReadback && !SnapshotGpuActive();
     int nativeW = 0;
     int nativeH = 0;
     float rs = 1.0f;
@@ -3900,7 +3905,7 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
     SDL_GPUTexture *resolveTarget = r->offscreenTex;
 
     /* Car shadow map (depth from the sun's view) before the scene uses it. */
-    if (!bReadback)
+    if (!bExact)
         render_car_shadow_map(r);
 
     /* ====================================================================
@@ -3954,7 +3959,7 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
             SDL_BindGPUGraphicsPipeline(rp, r->skyPipeline);
             float identMVP[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
             SDL_PushGPUVertexUniformData(r->cmdBuf, 0, identMVP, sizeof(identMVP));
-            push_sky_uniforms(r, skyFColor, bReadback);
+            push_sky_uniforms(r, skyFColor, bExact);
             SDL_GPUBufferBinding gvbb = {.buffer = r->skyVertBuf};
             SDL_BindGPUVertexBuffers(rp, 0, &gvbb, 1);
             SDL_GPUTextureSamplerBinding gtsb = {.texture = gTex, .sampler = r->samplerNearest};
@@ -3997,7 +4002,7 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
     fill_sun_uniforms(r, pfu.sun, pfu.camPos);
     fill_shadow_uniforms(r, pfu.shadow, pfu.lightVP);
     /* Editor and parity readbacks keep their exact output (as with AO). */
-    if (bReadback) {
+    if (bExact) {
         pfu.sun[3] = 0.0f;
         pfu.shadow[0] = 0.0f;
     }
@@ -4192,7 +4197,7 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
          * writes depth (track, walls, buildings, cars), and signs and the
          * HUD are still to come, so they draw on top un-darkened. Skipped
          * for editor/parity readback so those outputs never change. */
-        if (r->ssaoEnabled && !bReadback) {
+        if (r->ssaoEnabled && !bExact) {
             if (!r->ssao && !r->ssaoCreateFailed) {
                 r->ssao = ssao_create(r->device, r->colorTargetFormat);
                 r->ssaoCreateFailed = (r->ssao == NULL);

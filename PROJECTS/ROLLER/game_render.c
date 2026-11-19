@@ -10,6 +10,7 @@
 #include "car.h"
 #include "roller.h"    /* g_fMirrorFov */
 #include "moving.h"    /* replaytype */
+#include "snapshot.h"  /* FAT3D: GPU snapshots */
 
 #include <stdlib.h>
 #include <string.h>
@@ -266,11 +267,34 @@ void game_render_end_frame(GameRenderer *renderer) {
          * into pieces. (The pause menus have their own unscaled layer, see
          * game_render_hud_menu_begin.) */
         scene_render_gpu_set_hud_menu_open(renderer->gpu, game_req != 0 && replaytype == 2);
+        /* FAT3D: GPU snapshots are screenshots of the scene; the demo replays'
+         * "press a key to play" banner would cover it. */
+        if (SnapshotGpuActive() && scrbuf)
+            memset(scrbuf, 0, (size_t)iHudW * (size_t)iHudH);
         scene_render_gpu_set_hud_buffer(renderer->gpu,
                                         scrbuf,
                                         iHudW,
                                         iHudH);
-        scene_render_gpu_end_frame(renderer->gpu);
+        if (SnapshotGpuActive()) {
+            /* FAT3D: GPU snapshots have no window; requested replay frames are
+             * read back at a fixed size, the rest are just submitted. */
+            int iW = 0, iH = 0;
+            uint8 *pbyPixels = NULL;
+            bool bRead = false;
+            if (SnapshotGpuWantsFrame(&iW, &iH)) {
+                Uint32 uiSize = (Uint32)iW * (Uint32)iH * 4u;
+                pbyPixels = malloc(uiSize);
+                if (pbyPixels)
+                    bRead = scene_render_gpu_end_frame_readback(renderer->gpu, pbyPixels, uiSize,
+                                                                (Uint32)iW * 4u, (Uint32)iW, (Uint32)iH);
+            }
+            if (!pbyPixels)
+                scene_render_gpu_end_frame(renderer->gpu);
+            SnapshotGpuFrameDone(bRead ? pbyPixels : NULL, iW, iH);
+            free(pbyPixels);
+        } else {
+            scene_render_gpu_end_frame(renderer->gpu);
+        }
     }
 #endif
 }
@@ -1271,6 +1295,7 @@ void game_render_hud_message_begin(GameRenderer *renderer) {
     /* Same buffer and size game_render_end_frame hands the GPU HUD; the
      * replay panel draws the HUD unscaled anyway. */
     if (!renderer || renderer->mode != GAME_RENDER_GPU || !renderer->gpu || (game_req && replaytype == 2)) return;
+    if (SnapshotGpuActive()) return;   /* FAT3D: no HUD in GPU snapshots (see game_render_end_frame) */
     int iHudW = renderer->hudW > 0 ? renderer->hudW : (XMAX > 0 ? XMAX : 640);
     int iHudH = renderer->hudH > 0 ? renderer->hudH : (YMAX > 0 ? YMAX : 400);
     scene_render_gpu_hud_message_begin(renderer->gpu, scrbuf, iHudW, iHudH);
@@ -1278,6 +1303,7 @@ void game_render_hud_message_begin(GameRenderer *renderer) {
 
 void game_render_hud_map_begin(GameRenderer *renderer) {
     if (!renderer || renderer->mode != GAME_RENDER_GPU || !renderer->gpu || (game_req && replaytype == 2)) return;
+    if (SnapshotGpuActive()) return;
     int iHudW = renderer->hudW > 0 ? renderer->hudW : (XMAX > 0 ? XMAX : 640);
     int iHudH = renderer->hudH > 0 ? renderer->hudH : (YMAX > 0 ? YMAX : 400);
     scene_render_gpu_hud_map_begin(renderer->gpu, scrbuf, iHudW, iHudH);

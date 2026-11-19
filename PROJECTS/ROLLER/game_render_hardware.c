@@ -15,6 +15,7 @@
 #include "control.h"     /* getgroundz(), getroadz(), calculateseparatedcoordinatesystem() — real terrain queries, chunk-local coords */
 #include "function.h"    /* getbankz() */
 #include "loadtrak.h"    /* TrackInfo[], tTrackInfo — shoulder widths, surface types, roof height */
+#include "snapshot.h"    /* FAT3D: GPU snapshots */
 
 #include <SDL3/SDL.h>
 #include <stdlib.h>
@@ -850,6 +851,12 @@ static float car_tunnel_dark(int carIdx, float cover)
     float dt = s_uiLastNs[carIdx] ? (float)(now - s_uiLastNs[carIdx]) * 1e-9f : 1.0f;
     s_uiLastNs[carIdx] = now;
     if (dt > 1.0f) dt = 1.0f;
+    /* GPU snapshots step one game tick per frame, faster than real time, and
+     * the stock look is ROLLER's renderer without this. */
+    if (SnapshotGpuActive())
+        dt = 1.0f / 36.0f;
+    if (SnapshotGpuActive() && g_SnapshotConfig.bGpuStockLook)
+        cover = 0.0f;
     float target = GRHW_TUNNEL_DARK * cover;
     float k = 1.0f - expf(-dt / (target > s_fDark[carIdx] ? 0.12f : 0.025f));
     s_fDark[carIdx] += (target - s_fDark[carIdx]) * k;
