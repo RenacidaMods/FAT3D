@@ -518,8 +518,10 @@ struct SceneRendererGPU {
         SDL_GPUTexture *tex;
         int             start; /* first vertex index in texParticleVerts */
         int             count; /* number of vertices in this range */
+        bool            late;  /* drawn after the signs (name tags) */
     }                          texParticleRanges[SCENE_GPU_MAX_TEX_RANGES];
     int                        texParticleRangeCount;
+    bool                       particleLate; /* see scene_render_gpu_set_particle_after_signs */
 };
 
 /* ==========================================================================
@@ -2544,6 +2546,11 @@ void scene_render_gpu_screen_quad_flat(SceneRendererGPU *r,
     r->useParticleNdcZv = false;
 }
 
+void scene_render_gpu_set_particle_after_signs(SceneRendererGPU *r, bool late)
+{
+    if (r) r->particleLate = late;
+}
+
 void scene_render_gpu_set_particle_ndcz(SceneRendererGPU *r, float ndcZ)
 {
     if (r) r->particleNdcZ = ndcZ;
@@ -2598,7 +2605,8 @@ bool scene_render_gpu_screen_quad_textured(SceneRendererGPU *r,
      * are contiguous in the flat buffer even when tiles interleave across particles. */
     int ri;
     if (r->texParticleRangeCount > 0 &&
-        r->texParticleRanges[r->texParticleRangeCount - 1].tex == tex) {
+        r->texParticleRanges[r->texParticleRangeCount - 1].tex == tex &&
+        r->texParticleRanges[r->texParticleRangeCount - 1].late == r->particleLate) {
         ri = r->texParticleRangeCount - 1;
     } else {
         if (r->texParticleRangeCount >= SCENE_GPU_MAX_TEX_RANGES) return false;
@@ -2606,6 +2614,7 @@ bool scene_render_gpu_screen_quad_textured(SceneRendererGPU *r,
         r->texParticleRanges[ri].tex   = tex;
         r->texParticleRanges[ri].start = r->texParticleVertCount;
         r->texParticleRanges[ri].count = 0;
+        r->texParticleRanges[ri].late  = r->particleLate;
     }
 
     static const float uvU[4] = {1.0f, 0.0f, 0.0f, 1.0f};
@@ -2761,12 +2770,19 @@ static bool upload_sky_polygon(SceneRendererGPU *r, int *outVertCount)
  * original macros used it. */
 /* BLEND relies on its queued order for correct back-to-front alpha
  * compositing; SHADOW is drawn through its own dedicated loop already (not
- * draw_cmd_kind), included here defensively in case that ever changes. Every
- * other kind is opaque-with-proper-depth-test, so any draw order inside the
- * kind produces the same correct result -- safe to reorder by texture. */
+ * draw_cmd_kind), included here defensively in case that ever changes.
+ * TREE, SIGN and SIGN_BK don't write depth either (trees test against the
+ * scene but leave it alone; signs test against a depth snapshot), so where
+ * two of them overlap, the one drawn last ends up in front: they must keep
+ * the game's back-to-front queue order. Grouping them by texture drew a row
+ * of arrow signs round a bend, or trees standing in front of each other, in
+ * the wrong order. Every other kind writes depth, so any order inside the
+ * kind gives the same result -- safe to reorder by texture. */
 static bool draw_kind_is_order_sensitive(SceneGPUDrawKind kind)
 {
-    return kind == SCENE_GPU_DRAW_BLEND || kind == SCENE_GPU_DRAW_SHADOW;
+    return kind == SCENE_GPU_DRAW_BLEND || kind == SCENE_GPU_DRAW_SHADOW
+        || kind == SCENE_GPU_DRAW_TREE  || kind == SCENE_GPU_DRAW_SIGN
+        || kind == SCENE_GPU_DRAW_SIGN_BK;
 }
 
 /* qsort has no user-data parameter in portable C; single-threaded renderer,
@@ -3391,6 +3407,7 @@ void scene_render_gpu_begin_frame(SceneRendererGPU *r)
     r->carShadowDrawCount = 0;
     r->particleVertCount    = 0;
     r->particleNdcZ         = 0.0f;
+    r->particleLate         = false;
     r->useParticleNdcZv     = false;
     r->texParticleVertCount  = 0;
     r->texParticleRangeCount = 0;
@@ -4173,6 +4190,7 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
         SDL_GPUBufferBinding tpvbb = {.buffer = r->texParticleVertBuf};
         SDL_BindGPUVertexBuffers(rp, 0, &tpvbb, 1);
         for (int ri = 0; ri < r->texParticleRangeCount; ri++) {
+            if (r->texParticleRanges[ri].late) continue;   /* after the signs, below */
             SDL_GPUTextureSamplerBinding tptsb = {
                 .texture = r->texParticleRanges[ri].tex,
                 .sampler = r->sampler
@@ -4278,6 +4296,30 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
         if (r->signBkPipeline) {
             SDL_BindGPUGraphicsPipeline(rp, r->signBkPipeline);
             draw_cmd_kind(r, rp, &tsb, &shadowTsb, drawOrder, SCENE_GPU_DRAW_SIGN_BK);
+        }
+    }
+
+    /* Name tags, after the signs. Signs don't write depth, so drawn after a
+     * tag, a sign (or a tree drawn as a sign) behind it painted over it.
+     * The tags still test against the scene's depth, so walls and cars in
+     * front keep hiding them. */
+    if (drawTexParticles) {
+        bool bound = false;
+        for (int ri = 0; ri < r->texParticleRangeCount; ri++) {
+            if (!r->texParticleRanges[ri].late) continue;
+            if (!bound) {
+                SDL_BindGPUGraphicsPipeline(rp, r->texParticlePipeline);
+                SDL_GPUBufferBinding tpvbb = {.buffer = r->texParticleVertBuf};
+                SDL_BindGPUVertexBuffers(rp, 0, &tpvbb, 1);
+                bound = true;
+            }
+            SDL_GPUTextureSamplerBinding tptsb = {
+                .texture = r->texParticleRanges[ri].tex,
+                .sampler = r->sampler
+            };
+            SDL_BindGPUFragmentSamplers(rp, 0, &tptsb, 1);
+            SDL_DrawGPUPrimitives(rp, (Uint32)r->texParticleRanges[ri].count, 1,
+                                  (Uint32)r->texParticleRanges[ri].start, 0);
         }
     }
 

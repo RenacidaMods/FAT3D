@@ -243,6 +243,11 @@ void scene_render_gpu_screen_quad_flat(SceneRendererGPU *r,
                                        const float ndcX[4], const float ndcY[4],
                                        float cr, float cg, float cb, float ca);
 
+/* Textured screen quads queued while this is true draw after the signs
+ * (used for car name tags, so signs behind a tag can't paint over it).
+ * Reset to false each begin_frame. */
+void scene_render_gpu_set_particle_after_signs(SceneRendererGPU *r, bool late);
+
 /* Set the per-particle NDC depth used by subsequent screen_quad_* calls.
  * 0.0 = near plane (always passes depth test). Reset to 0 each begin_frame. */
 void scene_render_gpu_set_particle_ndcz(SceneRendererGPU *r, float ndcZ);

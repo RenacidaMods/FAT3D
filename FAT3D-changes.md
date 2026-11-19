@@ -98,6 +98,8 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 
 - Without a texture pack, the original clouds were drawn with the buildings and sun-shaded into dark blobs (players with a pack never saw it: HD clouds take the unshaded see-through pass). They now draw unshaded, after the shaded passes. Found with GPU snapshots, 19/11/2026.
 - **Soft cloud edges:** the HD loader snapped every HD tile's alpha to fully on or off at 50%, so the soft HD clouds were drawn as hard cut-outs. The sky cloud tiles (gentex 8 to 12) now keep their alpha; everything else is still snapped (19/11/2026).
+- **Draw order of signs and trees:** to save draw calls, the GPU renderer grouped each kind of surface by texture. That's safe for surfaces that write depth, but trees and signs don't, so where two overlap the one drawn last ends up in front. Grouping them by texture drew a row of arrow signs round a bend in the wrong order, and far trees over nearer billboards. Trees and signs now keep the game's back-to-front order. Same grouping in ROLLER (FatalDecomp), so a candidate for upstream (19/11/2026).
+- **Name tags behind trees and signs:** with Signs on top, signs (some of the trackside trees are signs too) draw last of all, after the name tags, and painted over them. Name tags now draw after the signs, still hidden by walls and cars in front of them (19/11/2026).
 - Bank 18 particle textures were never freed.
 - The GPU renderer now honours the shadows option for car shadows.
 - Snapshot test runs never save FATAL.INI or ROLLER.INI.

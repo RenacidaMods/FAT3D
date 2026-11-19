@@ -1409,6 +1409,7 @@ void game_render_hw_draw_car_name_tag(int carIdx, const GameRenderCarPose *pose,
         double cFVY = fVY0 - (double)dy4[i] * pixToFv;
         scene_render_gpu_project_to_ndc(gpu, cFVX, cFVY, fClZ0, &ndcX[i], &ndcY[i]);
     }
+    scene_render_gpu_set_particle_after_signs(gpu, true);   /* see that function */
     scene_render_gpu_set_particle_ndcz(gpu, tagDepth);
     scene_render_gpu_screen_quad_textured(gpu, ndcX, ndcY, s_tagLabelCache[carIdx].tex,
                                           1.0f, 1.0f, 1.0f, 1.0f);
@@ -1431,6 +1432,7 @@ void game_render_hw_draw_car_name_tag(int carIdx, const GameRenderCarPose *pose,
         scene_render_gpu_set_particle_ndcz(gpu, tagDepth);
         scene_render_gpu_screen_quad_textured(gpu, tNdcX, tNdcY, teamTex, 1.0f, 1.0f, 1.0f, 1.0f);
     }
+    scene_render_gpu_set_particle_after_signs(gpu, false);
 }
 
 void game_render_hw_draw_fps_overlay(void)
