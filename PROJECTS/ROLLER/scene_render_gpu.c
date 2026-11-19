@@ -161,7 +161,7 @@ static float match_screen_scale(const SceneRendererGPU *r);
 /* --------------------------------------------------------------------------
  * Deferred draw commands
  * -------------------------------------------------------------------------- */
-typedef enum { SCENE_GPU_DRAW_OPAQUE = 0, SCENE_GPU_DRAW_BLEND, SCENE_GPU_DRAW_BUILDING, SCENE_GPU_DRAW_BF_BUILDING, SCENE_GPU_DRAW_SIGN, SCENE_GPU_DRAW_SIGN_BK, SCENE_GPU_DRAW_TREE, SCENE_GPU_DRAW_WALL, SCENE_GPU_DRAW_BF_WALL, SCENE_GPU_DRAW_SHADOW, SCENE_GPU_DRAW_TRACK_DARKEN } SceneGPUDrawKind;
+typedef enum { SCENE_GPU_DRAW_OPAQUE = 0, SCENE_GPU_DRAW_BLEND, SCENE_GPU_DRAW_BUILDING, SCENE_GPU_DRAW_BF_BUILDING, SCENE_GPU_DRAW_SIGN, SCENE_GPU_DRAW_SIGN_BK, SCENE_GPU_DRAW_TREE, SCENE_GPU_DRAW_WALL, SCENE_GPU_DRAW_BF_WALL, SCENE_GPU_DRAW_SHADOW, SCENE_GPU_DRAW_TRACK_DARKEN, SCENE_GPU_DRAW_CLOUD } SceneGPUDrawKind;
 
 typedef struct {
     SDL_GPUTexture  *texture;
@@ -3192,6 +3192,7 @@ SDL_GPUTexture *scene_render_gpu_flush_secondary_view(SceneRendererGPU *r, int s
     pfu.sun[3] = 0.0f;
     pfu.shadow[0] = 0.0f;
     SDL_PushGPUFragmentUniformData(r->cmdBuf, 0, &pfu, sizeof(pfu));
+    if (r->buildingPipeline) { SDL_BindGPUGraphicsPipeline(rp, r->buildingPipeline); draw_cmd_kind(r, rp, &tsb, &shadowTsb, drawOrder, SCENE_GPU_DRAW_CLOUD); }
     if (r->treePipeline)   { SDL_BindGPUGraphicsPipeline(rp, r->treePipeline);   draw_cmd_kind(r, rp, &tsb, &shadowTsb, drawOrder, SCENE_GPU_DRAW_TREE); }
     /* Multiply-blend darken pass for TRANSPARENT non-textured track quads (glass/
      * divider walls) -- must run after opaque/wall/building/sign/tree so there's
@@ -4052,6 +4053,10 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
     pfu.sun[3] = 0.0f;
     pfu.shadow[0] = 0.0f;
     SDL_PushGPUFragmentUniformData(r->cmdBuf, 0, &pfu, sizeof(pfu));
+    if (r->buildingPipeline) {   /* the original clouds: unshaded cut-outs */
+        SDL_BindGPUGraphicsPipeline(rp, r->buildingPipeline);
+        draw_cmd_kind(r, rp, &tsb, &shadowTsb, drawOrder, SCENE_GPU_DRAW_CLOUD);
+    }
     if (r->treePipeline) {
         SDL_BindGPUGraphicsPipeline(rp, r->treePipeline);
         draw_cmd_kind(r, rp, &tsb, &shadowTsb, drawOrder, SCENE_GPU_DRAW_TREE);
@@ -7125,6 +7130,10 @@ void scene_render_gpu_quad_world_legacy(SceneRendererGPU *r,
         kind = SCENE_GPU_DRAW_BUILDING;
     else
         kind = SCENE_GPU_DRAW_OPAQUE;
+    /* The original clouds (no HD tiles) land with the buildings, but must not
+     * be sun-shaded: drawn with the building pipeline after the shaded passes. */
+    if (isCloud && kind == SCENE_GPU_DRAW_BUILDING)
+        kind = SCENE_GPU_DRAW_CLOUD;
 
     float cu[4], cv[4];
     if (isTrackDarken && r->emulateSoftwareTrackDarkenBorder) {

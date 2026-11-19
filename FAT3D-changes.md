@@ -96,6 +96,7 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 
 ## Other fixes
 
+- Without a texture pack, the original clouds were drawn with the buildings and sun-shaded into dark blobs (players with a pack never saw it: HD clouds take the unshaded see-through pass). They now draw unshaded, after the shaded passes. Found with GPU snapshots, 19/11/2026.
 - Bank 18 particle textures were never freed.
 - The GPU renderer now honours the shadows option for car shadows.
 - Snapshot test runs never save FATAL.INI or ROLLER.INI.
