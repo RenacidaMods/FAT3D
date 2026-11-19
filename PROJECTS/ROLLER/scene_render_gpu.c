@@ -970,6 +970,19 @@ static bool sky_mat4_invert(float out[16], const float m[16])
     return true;
 }
 
+/* True when the generic texture bank (gentex, which holds the clouds) has HD
+ * tiles. The original clouds' edges are painted to blend into the original
+ * flat sky, so without HD clouds the sky stays flat. */
+static bool sky_has_hd_clouds(const SceneRendererGPU *r)
+{
+    for (int i = 1; i < SCENE_GPU_MAX_TEXTURE_SLOTS; i++) {
+        const SceneGPUTextureSlot *s = &r->texSlots[i];
+        if (s->in_use && strcmp(s->dumpName, "gentex") == 0)
+            return s->hdTileSize > 0;
+    }
+    return false;
+}
+
 /* Fragment uniforms for the sky polygon. With the gradient shader: the
  * inverse view-projection plus a horizon and a zenith colour made from the
  * track's (fogged) sky colour -- paler towards the horizon, deeper overhead,
@@ -998,7 +1011,7 @@ static void push_sky_uniforms(SceneRendererGPU *r, SDL_FColor skyFColor, bool fl
     float skyFog = 1.0f - expf(-r->fogDensity * 100000.0f);
     if (skyFog < 0.0f) skyFog = 0.0f;
     if (skyFog > 1.0f) skyFog = 1.0f;
-    float g = r->skyGradient * (1.0f - skyFog);
+    float g = sky_has_hd_clouds(r) ? r->skyGradient * (1.0f - skyFog) : 0.0f;
     float base[3] = { skyFColor.r, skyFColor.g, skyFColor.b };
     static const float haze[3] = { 0.90f, 0.93f, 0.97f };
     float toHaze = 0.55f * g;  if (toHaze > 0.95f) toHaze = 0.95f;

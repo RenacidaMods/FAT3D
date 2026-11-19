@@ -22,7 +22,7 @@ All the lighting and effects below are **GPU renderer only**. The original softw
 | Texture dump for upscaling | Dump Textures as PNG | Off |
 | Render scale 4x, 5x and Screen | Render scale (`RenderScale`) | 1x |
 | Ambient occlusion | Ambient occlusion (`AmbientOcclusion`, `AORadius`, `AOStrength`) | Off, radius 400, strength 100% |
-| Sky gradient | Sky gradient (`SkyGradient`) | 100% (0% = original flat sky) |
+| Sky gradient (with HD clouds only) | Sky gradient (`SkyGradient`) | 100% (0% = original flat sky) |
 | Soft HD clouds | part of the HD texture pack | |
 | Sun shading | Sun shading (`SunShading`) | 60% |
 | Real car shadows | Car shadows (`CarShadows`) | 60% darkness (0% = classic flat shadows) |
@@ -60,7 +60,7 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 
 **Ambient occlusion** (soft contact shadow where walls meet road, under barriers, in tunnels): a half-resolution pass rebuilds view-space positions from the depth buffer, samples a 16-point hemisphere with a non-repeating per-pixel rotation, then a depth-aware 4x4 blur multiplies it into the scene. Fixes along the way: an angle bias so the shallow folds between road sections on hills don't darken; a height test so small lips between track sections don't draw stripes; normals measured over three texels on smooth surfaces (depth precision far away); the radius capped at 6% of the screen width close to the camera; and whole-texel depth lookups, because the half-size pass sat exactly on depth-texel borders and rounding picked the left or right texel differently per column, which drew screen-fixed stripes. An "AO only view (debug)" shows what it picks up.
 
-**Sky gradient:** the sky polygon is drawn by its own shader, which rebuilds each pixel's view ray from the inverse view-projection and blends from a pale horizon to a deeper zenith made from the track's own sky colour, so it follows the camera's pitch and roll. Fog still takes the sky over as before.
+**Sky gradient:** the sky polygon is drawn by its own shader, which rebuilds each pixel's view ray from the inverse view-projection and blends from a pale horizon to a deeper zenith made from the track's own sky colour, so it follows the camera's pitch and roll. Fog still takes the sky over as before. Only with HD clouds: the original clouds' edges are painted to blend into the original flat sky, so without a texture pack (or with HD Textures off) the sky stays flat whatever the setting (Ed, 19/11/2026).
 
 **Soft clouds:** the five cloud tiles (gentex 8 to 12; each cloud picks one at random) are redrawn from the originals' shapes with real see-through edges (part of the texture pack, which each player makes from their own copy).
 
