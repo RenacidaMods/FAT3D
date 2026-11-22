@@ -181,6 +181,9 @@ void scene_render_gpu_set_car_shadows_allowed(SceneRendererGPU *r, bool allowed)
 /* Set each frame: while an in-race menu is drawn on the HUD, HUD scale is
  * suspended so the menu isn't split into separately scaled pieces. */
 void scene_render_gpu_set_hud_menu_open(SceneRendererGPU *r, bool open);
+/* For screens drawn wholly on the HUD (the cup-win fireworks): skip the sky
+ * and clear to black, so the last race frame's sky and ground don't show. */
+void scene_render_gpu_set_black_backdrop(SceneRendererGPU *r, bool black);
 /* Bracket the drawing of a zoom message ("FINAL LAP", "PIT WORK"...) or of
  * the track map into the HUD buffer buf (w x h), ending either with
  * scene_render_gpu_hud_layer_end. While HUD scale is on, the pixels drawn

@@ -314,6 +314,7 @@ struct SceneRendererGPU {
     float                    hudScale;
     float                    hudMapScale;   /* bottom-left pieces (the track map) */
     bool                     hudMenuOpen;   /* in-race menu on the HUD: draw it unscaled */
+    bool                     blackBackdrop; /* 2D-only screen (cup fireworks): no sky, clear to black */
     SDL_GPUBuffer           *hudPieceVertBuf;
     SDL_GPUTransferBuffer   *hudPieceXfer;
     int                      hudPieceVertCount;
@@ -2704,6 +2705,12 @@ static void compute_sky_colors(SceneRendererGPU *r, SDL_FColor *outSkyClear, SDL
         1.0f
     };
     SDL_FColor skyClear = skyFColor;
+    if (r->blackBackdrop) {
+        SDL_FColor black = {0.0f, 0.0f, 0.0f, 1.0f};
+        *outSkyClear  = black;
+        *outSkyFColor = black;
+        return;
+    }
     if (r->groundColorIdx >= 0 && r->skyAnyGround) {
         const tColor *gc = &palette[r->groundColorIdx];
         float groundR = gc->byR / 63.0f;
@@ -2726,6 +2733,8 @@ static void compute_sky_colors(SceneRendererGPU *r, SDL_FColor *outSkyClear, SDL
 static bool upload_sky_polygon(SceneRendererGPU *r, int *outVertCount)
 {
     *outVertCount = 0;
+    if (r->blackBackdrop)   /* the sky left over from the last race frame */
+        return false;
     if (!(r->groundColorIdx >= 0 && r->skyPolyN >= 3 && r->skyPipeline && r->skyVertBuf))
         return false;
 
@@ -4904,6 +4913,12 @@ void scene_render_gpu_set_hud_menu_open(SceneRendererGPU *r, bool open)
 {
     if (!r) return;
     r->hudMenuOpen = open;
+}
+
+void scene_render_gpu_set_black_backdrop(SceneRendererGPU *r, bool black)
+{
+    if (!r) return;
+    r->blackBackdrop = black;
 }
 
 void scene_render_gpu_set_brightness(SceneRendererGPU *r, float brightness)

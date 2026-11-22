@@ -266,7 +266,14 @@ void game_render_end_frame(GameRenderer *renderer) {
         /* The replay panel is drawn on the HUD; HUD scale would split it
          * into pieces. (The pause menus have their own unscaled layer, see
          * game_render_hud_menu_begin.) */
-        scene_render_gpu_set_hud_menu_open(renderer->gpu, game_req != 0 && replaytype == 2);
+        /* FAT3D: the cup-win fireworks (firework_screen, champ_mode >= 16)
+         * are drawn wholly into scrbuf over a black fill, with no 3D scene.
+         * Show them full size on black: HUD scale shrank the whole screen
+         * into a small box, with the last race frame's sky and ground round it. */
+        bool bFireworks = champ_mode >= 16;
+        scene_render_gpu_set_hud_menu_open(renderer->gpu,
+                                           (game_req != 0 && replaytype == 2) || bFireworks);
+        scene_render_gpu_set_black_backdrop(renderer->gpu, bFireworks);
         /* FAT3D: GPU snapshots are screenshots of the scene; the demo replays'
          * "press a key to play" banner would cover it. */
         if (SnapshotGpuActive() && scrbuf)
