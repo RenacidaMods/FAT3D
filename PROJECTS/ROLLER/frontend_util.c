@@ -29,6 +29,19 @@
 #endif
 
 //-------------------------------------------------------------------------------------------------
+// FAT3D: the cheat words in CheckNames order, as in the V2.0 patch's PASSWORD.INI.
+// The V1.0 disc's file stops after DUEL, so the later cheats (MRFROSTY,
+// TINYTOTS and so on) could never be typed even though the code handles them.
+// loadcheatnames fills any missing places from this list.
+static const char *s_szBuiltinCheatNames[] = {
+  "SUICYCO", "MAYTE", "2X4B523P", "TINKLE", "LOVEBUN", "DR DEATH", "SUPERMAN",
+  "REMOVE", "TOPTUNES", "GOLDBOY", "CUP WON", "I WON", "CINEMA", "ROLL EM",
+  "FORMULA1", "MREPRISE", "DUEL", "PROCESS", "MRFROSTY", "MR ZOOM", "TACHYONS",
+  "YOTARACE", "CLONES", "TINYTOTS", "WARPGATE", "FREAKY"
+};
+#define BUILTIN_CHEAT_COUNT ((int)(sizeof(s_szBuiltinCheatNames) / sizeof(s_szBuiltinCheatNames[0])))
+
+//-------------------------------------------------------------------------------------------------
 //0004A440
 void loadcheatnames()
 {
@@ -42,30 +55,39 @@ void loadcheatnames()
   iSize = ROLLERfilelength("PASSWORD.INI");
 
   fp = ROLLERfopen("PASSWORD.INI", "rb");
-  if (!fp)
-    return;
+  if (fp) {
+    if (iSize < 0)
+      iSize = 0;
+    if (iSize > (int)sizeof(buffer) - 1)
+      iSize = (int)sizeof(buffer) - 1;
 
-  // Read file into buffer
-  fread(buffer, iSize, 1, fp);
-  fclose(fp);
+    // Read file into buffer
+    fread(buffer, iSize, 1, fp);
+    fclose(fp);
 
-  // Decode the read contents
-  decode((uint8 *)buffer, iSize, 23, 37);
+    // Decode the read contents
+    decode((uint8 *)buffer, iSize, 23, 37);
+    buffer[iSize] = '\0';
 
-  // Tokenize buffer and load cheat names
-  szTok = strtok(buffer, "\n\t\r");
+    // Tokenize buffer and load cheat names
+    szTok = strtok(buffer, "\n\t\r");
 
-  while (szTok) {
-    // Check for end marker string
-    if (strcmp(szTok, "#") == 0)
-      break;
+    while (szTok && iCheatIdx < 31) {
+      // Check for end marker string
+      if (strcmp(szTok, "#") == 0)
+        break;
 
-    // Copy token into cheat_names[iCheatIdx]
-    strncpy(cheat_names[iCheatIdx], szTok, 9);
+      // Copy token into cheat_names[iCheatIdx]
+      strncpy(cheat_names[iCheatIdx], szTok, 9);
 
-    iCheatIdx++;
-    szTok = strtok(NULL, "\n\t\r");
+      iCheatIdx++;
+      szTok = strtok(NULL, "\n\t\r");
+    }
   }
+
+  // FAT3D: fill the places a short (V1.0) or missing PASSWORD.INI leaves out
+  for (; iCheatIdx < BUILTIN_CHEAT_COUNT; iCheatIdx++)
+    strncpy(cheat_names[iCheatIdx], s_szBuiltinCheatNames[iCheatIdx], 9);
 
   // Set final cheat name entry to end marker
   cheat_names[iCheatIdx][0] = '#';

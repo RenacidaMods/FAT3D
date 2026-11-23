@@ -6,7 +6,7 @@ The aim: Fatal Racing as it might have looked with full 3D-card rendering of the
 
 Source: branch `renacida-mods` of https://github.com/RenacidaMods/FAT3D. One commit per change; most are behind a setting. Nothing here needs or ships game files: players use their own copy of Fatal Racing.
 
-Last updated: 22/11/2026.
+Last updated: 23/11/2026.
 
 ---
 
@@ -101,6 +101,7 @@ All of these share **one sun** (`scene_render_gpu_sun_direction()`: towards (0.6
 - **Draw order of signs and trees:** to save draw calls, the GPU renderer grouped each kind of surface by texture. That's safe for surfaces that write depth, but trees and signs don't, so where two overlap the one drawn last ends up in front. Grouping them by texture drew a row of arrow signs round a bend in the wrong order, and far trees over nearer billboards. Trees and signs now keep the game's back-to-front order. Same grouping in ROLLER (FatalDecomp), so a candidate for upstream (19/11/2026).
 - **Name tags behind trees and signs:** with Signs on top, signs (some of the trackside trees are signs too) draw last of all, after the name tags, and painted over them. Name tags now draw after the signs, still hidden by walls and cars in front of them (19/11/2026).
 - **Cup-win fireworks:** the fireworks screen is drawn wholly on the HUD layer with no 3D scene, so HUD scale shrank it into a small box in the middle, with the last race frame's sky and ground round it. While it shows, the HUD is now drawn unscaled (like the pause menus) on black (22/11/2026).
+- **All 26 cheats on every disc:** the game reads its cheat words from PASSWORD.INI. The V1.0 disc's file stops after DUEL, so the cheats the V2.0 patch added (MRFROSTY, MR ZOOM, TACHYONS, YOTARACE, TINYTOTS, WARPGATE, FREAKY, PROCESS, CLONES) could never be typed, though ROLLER has all their effects. Missing places are now filled from a built-in list in the same order, which also covers a missing PASSWORD.INI (before, the cheat check then read past the end of its list). FREAKY needs CHEATPAL.PAL, which V1.0 doesn't have either: it's the normal palette with every value flipped (63 - x, checked byte for byte), so it's now built from PALETTE.PAL when missing (23/11/2026).
 - Bank 18 particle textures were never freed.
 - The GPU renderer now honours the shadows option for car shadows.
 - Snapshot test runs never save FATAL.INI or ROLLER.INI.

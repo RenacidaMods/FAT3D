@@ -129,6 +129,27 @@ char szF10ToQuitChamp[25] = "F10 TO QUIT CHAMPIONSHIP"; //000A029C
 char szF10ToQuitGame[17] = "F10 TO QUIT GAME";          //000A02B8
 
 //-------------------------------------------------------------------------------------------------
+// FAT3D: CHEATPAL.PAL (the FREAKY cheat's palette) only came with the V2.0
+// patch. It is the normal palette with every value flipped (63 - x), so when
+// it is missing, build it from PALETTE.PAL instead of running with no palette.
+static void setpal_with_cheat_fallback(const char *szPaletteFile)
+{
+  if (setpal(szPaletteFile) || szPaletteFile != szCheatPal)
+    return;
+  if (!setpal(szPal) || !pal_addr)
+    return;
+
+  uint8 *pRaw = (uint8 *)pal_addr;
+  for (int i = 0; i < 768; ++i)
+    pRaw[i] = (uint8)(63 - (pRaw[i] & 63));
+  for (int i = 0; i < 256; ++i) {
+    palette[i].byR = (uint8)(63 - (palette[i].byR & 63));
+    palette[i].byG = (uint8)(63 - (palette[i].byG & 63));
+    palette[i].byB = (uint8)(63 - (palette[i].byB & 63));
+  }
+}
+
+//-------------------------------------------------------------------------------------------------
 
 int champ_track[16] = { 1, 2, 3, 9, 5, 1, 7, 8, 1, 1, 1, 1, 1, 1, 1, 1 }; //000A3130
 int exiting = 0;            //000A3170
@@ -3846,7 +3867,7 @@ void play_game_init()
     szPaletteFile = szCheatPal;
   else
     szPaletteFile = szPal;
-  setpal(szPaletteFile);
+  setpal_with_cheat_fallback(szPaletteFile);
   FindShades();
   InitRemaps();
   if (player_type == 2) {
