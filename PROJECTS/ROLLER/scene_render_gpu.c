@@ -2657,6 +2657,97 @@ bool scene_render_gpu_screen_quad_darken(SceneRendererGPU *r, float alpha)
                                                   1.0f, 1.0f, 1.0f, alpha);
 }
 
+/* FAT3D: draw smoke and fire puffs back to front.
+ *
+ * Each puff is a screen-space quad with one depth (or a depth per corner for
+ * trails), depth-tested but not depth-writing, queued car by car and then in
+ * each car's spray-slot order. Unsorted, a farther puff queued later paints
+ * over a nearer one (smoke in front of an explosion's flames). The software
+ * renderer depth-sorts them, so do the same here: within every run of puffs,
+ * order the quads by their mean depth, farthest first (stable, so equal
+ * depths keep queue order).
+ *
+ * Quads whose corners are all at depth 0 (screen overlays: player-view and
+ * mirror composites, the pause darken) and late quads (name tags) are
+ * barriers: they keep their place, and puffs never move across them.
+ * Ranges from firstRange on are rebuilt; earlier ones are left alone. */
+typedef struct {
+    int             src;   /* first vertex of the quad in texParticleVerts */
+    float           depth; /* mean NDC depth of its six vertices */
+    SDL_GPUTexture *tex;
+    bool            late;
+} TexParticleQuadSort;
+
+static int compare_tex_particle_quads(const void *a, const void *b)
+{
+    const TexParticleQuadSort *qa = (const TexParticleQuadSort *)a;
+    const TexParticleQuadSort *qb = (const TexParticleQuadSort *)b;
+    if (qa->depth != qb->depth)
+        return qa->depth > qb->depth ? -1 : 1;   /* farther (larger z) first */
+    return qa->src < qb->src ? -1 : (qa->src > qb->src ? 1 : 0);
+}
+
+static void sort_tex_particles_back_to_front(SceneRendererGPU *r, int firstRange)
+{
+    static TexParticleQuadSort s_quads[SCENE_GPU_MAX_PARTICLE_VERTS / 6];
+    static SceneGPUTexParticleVertex s_verts[SCENE_GPU_MAX_PARTICLE_VERTS];
+
+    if (!r || firstRange < 0 || firstRange >= r->texParticleRangeCount) return;
+
+    int nQuads = 0;
+    for (int ri = firstRange; ri < r->texParticleRangeCount; ri++) {
+        int start = r->texParticleRanges[ri].start;
+        int count = r->texParticleRanges[ri].count;
+        for (int v = start; v + 6 <= start + count; v += 6) {
+            if (nQuads >= (int)(sizeof(s_quads) / sizeof(s_quads[0]))) return;
+            float sum = 0.0f;
+            for (int k = 0; k < 6; k++) sum += r->texParticleVerts[v + k].z;
+            s_quads[nQuads++] = (TexParticleQuadSort){ v, sum / 6.0f,
+                r->texParticleRanges[ri].tex, r->texParticleRanges[ri].late };
+        }
+    }
+    if (nQuads < 2) return;
+
+    /* Sort each run of puffs between barriers. */
+    bool changed = false;
+    int runStart = 0;
+    for (int i = 0; i <= nQuads; i++) {
+        bool barrier = (i == nQuads) || s_quads[i].late || s_quads[i].depth <= 0.0f;
+        if (!barrier) continue;
+        int runLen = i - runStart;
+        if (runLen > 1) {
+            qsort(&s_quads[runStart], (size_t)runLen, sizeof(s_quads[0]), compare_tex_particle_quads);
+            for (int j = runStart + 1; j < i && !changed; j++)
+                if (s_quads[j].src < s_quads[j - 1].src) changed = true;
+        }
+        runStart = i + 1;
+    }
+    if (!changed) return;
+
+    /* Rewrite the vertices in the new order and rebuild the ranges, merging
+     * neighbours that share a texture (at most one range per quad, so the
+     * range array can't overflow). */
+    int base = r->texParticleRanges[firstRange].start;
+    int outRange = firstRange;
+    for (int i = 0; i < nQuads; i++) {
+        memcpy(&s_verts[i * 6], &r->texParticleVerts[s_quads[i].src],
+               6 * sizeof(SceneGPUTexParticleVertex));
+        if (outRange > firstRange
+            && r->texParticleRanges[outRange - 1].tex == s_quads[i].tex
+            && r->texParticleRanges[outRange - 1].late == s_quads[i].late) {
+            r->texParticleRanges[outRange - 1].count += 6;
+        } else {
+            r->texParticleRanges[outRange].tex   = s_quads[i].tex;
+            r->texParticleRanges[outRange].start = base + i * 6;
+            r->texParticleRanges[outRange].count = 6;
+            r->texParticleRanges[outRange].late  = s_quads[i].late;
+            outRange++;
+        }
+    }
+    memcpy(&r->texParticleVerts[base], s_verts, (size_t)nQuads * 6 * sizeof(SceneGPUTexParticleVertex));
+    r->texParticleRangeCount = outRange;
+}
+
 /* Call before a secondary view's own draw_road() runs (i.e. before any of
  * its scene content -- including real smoke/explosion particles, which use
  * this same texParticle path -- gets queued). Snapshots the current
@@ -3078,6 +3169,7 @@ SDL_GPUTexture *scene_render_gpu_flush_secondary_view(SceneRendererGPU *r, int s
      * anything before the snapshot (an earlier secondary view's still-pending
      * composite quad). */
     int secOwnTexRangeStart  = savedTexParticleRangeCount;
+    sort_tex_particles_back_to_front(r, secOwnTexRangeStart);   /* FAT3D: farthest puffs first */
     bool drawSecTexParticles = (r->texParticleRangeCount > secOwnTexRangeStart
                                 && r->texParticlePipeline && r->texParticleVerts
                                 && r->texParticleVertBuf);
@@ -3916,6 +4008,7 @@ static bool scene_render_gpu_end_frame_internal(SceneRendererGPU *r,
      * smoke) -- see the cycle=true comment on the sky vertex buffer above for
      * why reusing the same memory without cycling corrupts an earlier,
      * not-yet-GPU-consumed write. */
+    sort_tex_particles_back_to_front(r, 0);   /* FAT3D: farthest puffs first */
     bool drawTexParticles = (r->texParticleRangeCount > 0
                              && r->texParticlePipeline && r->texParticleVerts
                              && r->texParticleVertBuf);
